@@ -1,0 +1,201 @@
+#-----------------------------------------------------------------------------------------------------#
+#							Call settings
+#-----------------------------------------------------------------------------------------------------#
+source("C:/DATA_STORAGE/Projects/Katherine_Trajectory_analysis/Scripts/Settings.R")
+
+
+
+#-----------------------------------------------------------------------------------------------------#
+#							Input
+#-----------------------------------------------------------------------------------------------------#
+load(file = paste0(s_OUT_dir,"Scorpius/Scorpius_obj.Rdata"))
+load(file = paste0(s_OUT_dir,"Prep/logcpm.Rdata"))
+load(file = paste0(s_OUT_dir,"Prep/Pheno.Rdata"))
+load(file = paste0(s_OUT_dir,"LME/lme_table.Rdata"))
+load(file = paste0(s_OUT_dir,"eQTL/eQTLdata.Rdata"))
+
+#-----------------------------------------------------------------------------------------------------#
+#							Input
+#-----------------------------------------------------------------------------------------------------#
+library("coloc")
+library(jsonlite)
+library(httr)
+library(dplyr)
+require(data.table)
+
+# https://www.metabrain.nl/
+# cis eqtls cortex samples from European ancestry
+# manually exported from the the browser sucessfully,  13666930 eqtls
+# https://doi.org/10.1101/2021.03.01.433439
+eQTLs_MAF = fread("C:/DATA_STORAGE/Projects/Katherine_Trajectory_analysis/Anno/eQTL metabrain/cortex eur MAF/2020-05-26-Cortex-EUR-MAF.txt",header = TRUE,sep = "\t")
+
+# add MAF from same database (diff file)
+eQTLdata$MAF = eQTLs_MAF[match(eQTLdata$ID,eQTLs_MAF$SNP),"MAF"] #8354 out of 13666930
+eQTLdata$MAF = as.numeric(unlist(eQTLdata$MAF))
+eQTLs_data_1e_5 = eQTLdata[eQTLdata$FDR < 1e-5,] #4915 out of 8354
+eQTLs_data_1e_5$SNP = paste0("rs",gsub(gsub(eQTLs_data_1e_5$ID,replacement = "",pattern = "^.*rs"),pattern = ":.*",replacement = ""))
+eQTLs_data_1e_5$NrSamples = eQTLs_data_1e_5$Nr.Samples
+eQTLs_data_1e_5$Zscore = eQTLs_data_1e_5$Z.score
+
+
+#-----------------------------------------------------------------------------------------------------#
+#						 	local functions
+#-----------------------------------------------------------------------------------------------------#
+# Z score to beta
+
+BetaFromZ = function(z,p,n){z / sqrt(2*p*(1- p)*(n + z^2))}
+SDFromZ = function(z,p,n){1 / sqrt(2*p*(1- p)*(n + z^2))}
+
+GWAS_coloc = function(GWAS_data_name,data_name,Formula_Hypothesis = "H4>0.9",savename="Result_coloc_"){
+	Gwas_data = get(GWAS_data_name,envir = .GlobalEnv)
+	data_data = get(data_name,envir = .GlobalEnv)
+	
+	# check if SNPs overlap; else next
+	SNP_order = intersect(Gwas_data$snp,data_data$SNP)
+	if(length(SNP_order)!=0){
+		
+		# Reorder SNPs 
+		#Gwas_data = Gwas_data[match(SNP_order,Gwas_data$snp),]
+		Gwas_data$beta = Gwas_data$beta[match(SNP_order,Gwas_data$snp)]
+		Gwas_data$varbeta = Gwas_data$varbeta[match(SNP_order,Gwas_data$snp)]
+		Gwas_data$MAF = Gwas_data$MAF[match(SNP_order,Gwas_data$snp)]
+		if(length(Gwas_data$N)>1){Gwas_data$N = Gwas_data$N[match(SNP_order,Gwas_data$snp)]}
+		Gwas_data$snp = Gwas_data$snp[match(SNP_order,Gwas_data$snp)]
+		
+		
+		data_data = data_data[match(SNP_order,data_data$SNP),]
+		
+		filt_uniq_coloc = list(beta = as.numeric(BetaFromZ(data_data$Zscore,data_data$MAF,data_data$NrSamples)),
+								varbeta = as.numeric(SDFromZ(data_data$Zscore,data_data$MAF,data_data$NrSamples))^2,
+								type = "quant",
+								snp = data_data$SNP, 
+								MAF = data_data$MAF,
+								N = data_data$NrSamples)
+		check_dataset(filt_uniq_coloc)
+		
+		
+		
+		
+		if(sum(Gwas_data$snp%in%filt_uniq_coloc$snp)>1){
+			cat(paste0("  ",GWAS_data_name,": ",round((sum(Gwas_data$snp%in%data_data$SNP)/length(Gwas_data$snp))*100,3),"% overlap\n"))
+			
+			coloc_result_edu = try(coloc.abf(Gwas_data, filt_uniq_coloc))
+			if(sum(coloc_result_edu$summary[2:6]==0)==0){
+				SensRes = sensitivity(coloc_result_edu,Formula_Hypothesis)
+				
+				if(sum(SensRes$pass)>0){
+					assign(paste0(savename,GWAS_data_name,"_",(lme_table$feature[i])),coloc_result_edu,envir = .GlobalEnv)
+				}
+			}
+			
+			cat(paste0("\n\n"))
+		}
+	}
+}
+#-----------------------------------------------------------------------------------------------------#
+#							LOAD / prepare GWASSES
+#-----------------------------------------------------------------------------------------------------#
+
+
+
+# PTSD freeze 2; 2019 (from https://pgc.unc.edu/for-researchers/download-results/)
+GWAS_PTSD = fread("D:/DATA_STORAGE/GWAS/PTSD_2019/pts_eur_freeze2_overall.results/pts_eur_freeze2_overall.results", sep = "\t")
+GWAS_PTSD = GWAS_PTSD[GWAS_PTSD$P < 1e-5,]
+# exclude massive differnces in allele frequenceis between case and control
+GWAS_PTSD = GWAS_PTSD[abs(GWAS_PTSD$FRQ_A_23212-GWAS_PTSD$FRQ_U_151447) < 0.05,]
+GWAS_PTSD$Mean_MAF = apply(data.frame(GWAS_PTSD$FRQ_A_23212, GWAS_PTSD$FRQ_U_151447),1,mean)
+GWAS_PTSD_coloc = list(beta = GWAS_PTSD$OR, 
+                            varbeta = GWAS_PTSD$SE^2,
+                            type = "quant",
+                            snp = GWAS_PTSD$SNP, 
+                            MAF = ifelse(GWAS_PTSD$Mean_MAF>0.5,1-GWAS_PTSD$Mean_MAF,GWAS_PTSD$Mean_MAF),
+                            N = GWAS_PTSD$Neff)
+check_dataset(GWAS_PTSD_coloc)
+
+
+#MDD (from https://pgc.unc.edu/for-researchers/download-results/)
+# Downsampled MDD (PGC MDD without UK Biobank and 23andMe + UKB MDD)
+# WAS ADJUSTER MANUALLY, AS THE HEADER WAS SPLIT BY INCONSISTEN SPACES INSTEAD OF SINGLE TAB
+GWAS_MDD = fread("D:/DATA_STORAGE/GWAS/Major_depressive_disorder_2020/MDD_MHQ_METACARPA_INFO6_A5_NTOT_no23andMe_noUKBB.tsv", sep = "\t")
+GWAS_MDD = GWAS_MDD[GWAS_MDD$p_wald < 1e-5,]
+GWAS_MDD_coloc = list(beta = GWAS_MDD$beta, 
+                            varbeta = GWAS_MDD$se^2,
+                            type = "quant",
+                            snp = GWAS_MDD$rsid, 
+                            MAF = ifelse(GWAS_MDD$effect_allele_frequency>0.5,1-GWAS_MDD$effect_allele_frequency,GWAS_MDD$effect_allele_frequency),
+                            N = GWAS_MDD$n)
+check_dataset(GWAS_MDD_coloc)
+
+
+
+# SZ (from https://pgc.unc.edu/for-researchers/download-results/)
+GWAS_SZ = fread("D:/DATA_STORAGE/GWAS/Schizophrenia_2022/PGC3_SCZ_wave3.european.autosome.public.v3.vcf.tsv", sep = "\t",header=TRUE)
+GWAS_SZ = GWAS_SZ[GWAS_SZ$PVAL < 1e-5,]
+# exclude massive differnces in allele frequenceis between case and control
+GWAS_SZ = GWAS_SZ[abs(GWAS_SZ$FCAS-GWAS_SZ$FCON) < 0.05,]
+GWAS_SZ$Mean_MAF = apply(data.frame(GWAS_SZ$FCAS, GWAS_SZ$FCON),1,mean)
+GWAS_SZ_coloc = list(beta = GWAS_SZ$BETA, 
+                            varbeta = GWAS_SZ$SE^2,
+                            type = "quant",
+                            snp = GWAS_SZ$ID, 
+                            MAF = ifelse(GWAS_SZ$Mean_MAF>0.5,1-GWAS_SZ$Mean_MAF,GWAS_SZ$Mean_MAF),
+                            N = GWAS_SZ$NEFF)
+check_dataset(GWAS_SZ_coloc)
+
+
+# make set of GWASes to be tested
+GWAS_set = ls()[grep(ls(),pattern="GWAS_.*._coloc")]
+
+#-----------------------------------------------------------------------------------------------------#
+#							coloc PER GENE Normal "H3 + H4 > 0.99"
+#-----------------------------------------------------------------------------------------------------#
+# very sign is "H4/H3 > 5 & H3 + H4 > 0.99"
+for(i in 1:dim(lme_table)[1]){
+	temp_eQTLs1e_5 = c()
+	temp_index_eqtl = which(lme_table$feature[i]==eQTLs_data_1e_5$ID.1)
+	if(length(temp_index_eqtl)==0){next}
+
+
+	temp_eQTLs1e_5 = rbind(temp_eQTLs1e_5,eQTLs_data_1e_5[temp_index_eqtl,])
+	  
+	# some SNPs might be duplicated due to overlap! ... Actually only 1 gene causes overlap!! KRT73 1189 hits duplicated due to this :o
+	#dim(temp_eQTLs1e_5) # 8466
+
+
+	
+	cat(paste0(rownames(lme_table)[i],"\n"))
+	
+	lapply(GWAS_set,function(x){GWAS_coloc(GWAS_data_name = x,data_name = "temp_eQTLs1e_5",Formula_Hypothesis = "H3 + H4 > 0.99",savename="Result_coloc_normal_")})
+
+}
+
+#-----------------------------------------------------------------------------------------------------#
+#							Result table normal causal
+#-----------------------------------------------------------------------------------------------------#
+temp_list = ls()[grep(ls(),pattern = "^Result_coloc_normal")]
+Res_normal_causal = as.data.frame(lapply(temp_list ,function(x){(data.frame(get(x)$summary))}))
+colnames(Res_normal_causal) = temp_list
+Res_normal_causal= t(Res_normal_causal)
+
+#-----------------------------------------------------------------------------------------------------#
+#							Fancytable
+#-----------------------------------------------------------------------------------------------------#
+Table_final =data.frame(GWAS = gsub(rownames(Res_normal_causal)[],pattern = "Result_coloc_normal_GWAS_|_coloc_.*.",replacement = ""),
+'Gene name' = gsub(rownames(Res_normal_causal)[],pattern = ".*._",replacement = ""), 
+no.SNP = Res_normal_causal[,"nsnps"], 
+PPH0 =Res_normal_causal[,"PP.H0.abf"],
+PPH1 =Res_normal_causal[,"PP.H1.abf"],
+PPH2 =Res_normal_causal[,"PP.H2.abf"],
+PPH3 =Res_normal_causal[,"PP.H3.abf"],
+PPH4 =Res_normal_causal[,"PP.H4.abf"], 
+'PPH3_plus_PPH4' =Res_normal_causal[,"PP.H4.abf"]+Res_normal_causal[,"PP.H3.abf"], 
+'PPH4_div_PPH3' =Res_normal_causal[,"PP.H4.abf"]/Res_normal_causal[,"PP.H3.abf"])
+rownames(Table_final) = 1:dim(Table_final)[1]
+
+#-----------------------------------------------------------------------------------------------------#
+#							output
+#-----------------------------------------------------------------------------------------------------#
+save(Table_final,file = paste0(s_ROOT,s_out_folder,"Coloc/Table_final.Rdata")) 
+save.image(paste0(s_ROOT,s_out_folder,"Coloc/IMAGE_workspace.Rdata"))
+write.table(format(Table_final, digits=3),paste0(s_ROOT,s_out_folder,"Coloc/Coloc_final_table.tsv"),col.names = TRUE,row.names = TRUE,sep = "\t",quote = FALSE)
+

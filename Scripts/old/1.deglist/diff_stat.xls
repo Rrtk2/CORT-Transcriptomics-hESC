@@ -1,0 +1,8 @@
+compare	all	up	down	threshold
+C_PROvsD_PRO	2410	1275	1135	DESeq2 pvalue<=0.05 |log2FoldChange|>=0.0
+C_DiffyvsD_Diffy	2195	1152	1043	DESeq2 pvalue<=0.05 |log2FoldChange|>=0.0
+C_DiffmvsD_Diffm	4328	2199	2129	DESeq2 pvalue<=0.05 |log2FoldChange|>=0.0
+D_DiffyvsD_PRO	15802	8023	7779	DESeq2 pvalue<=0.05 |log2FoldChange|>=0.0
+D_DiffmvsD_Diffy	13706	7069	6637	DESeq2 pvalue<=0.05 |log2FoldChange|>=0.0
+LatevsEarly	11345	5624	5721	DESeq2 pvalue<=0.05 |log2FoldChange|>=0.0
+DIFFvsPRO	15934	8878	7056	DESeq2 pvalue<=0.05 |log2FoldChange|>=0.0
