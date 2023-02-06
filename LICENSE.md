@@ -1,10 +1,7 @@
 MIT License
 
 Copyright (c) 2022 Rick A. Reijnders
-Original source https://github.com/Rrtk2/PPMI-ML-Cognition-PD
-Publication 
-Harvey, J., Reijnders, R.A., Cavill, R. et al. Machine learning-based prediction of cognitive outcomes in de novo Parkinson’s disease. npj Parkinsons Dis. 8, 150 (2022). 
-https://doi.org/10.1038/s41531-022-00409-5
+Original source https://github.com/Rrtk2/CORT-Transcriptomics-hESC
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
