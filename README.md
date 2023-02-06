@@ -7,17 +7,7 @@ Welcome to the github repository containing all the scripts and several document
 Chronic stress exposure in early life has been associated with the development of mental disorders such as major depressive disorder (MDD) and post-traumatic stress disorder (PTSD). It has been shown that chronic stress interacts with the developing brain and producing significant changes in neural circuits that eventually increases the susceptibility for the development of mental disorders. A growing number of studies emphasizes the negative impact of early life chronic exposure to glucocorticoids (GCs) on neuronal differentiation. In this study, we investigated the transcriptional changes throughout neuronal differentiation following chronic cortisol treatment in an in vitro model of neuronal differentiation derived from human embryonic stem cells. Trajectory analysis identified 8 unique patterns driving neuronal differentiation, which were then used to investigate the top genes significantly impacted by chronic cortisol exposure during early and late stages of neuronal differentiation. The resulting genes are known to be involved in neuronal differentiation and synaptic formation processes, which suggests a possible impact of chronic cortisol on these neural processes in developing human cortical neurons. Together, these data highlight the unique effects of chronic cortisol at different stages of development of cortical neurons and identify candidate genes and pathways for future studies looking into the interplay between chronic stress and cortical neurogenesis in relation to stress-related mental disorders.
 
 ### Collaborators
-Katherine Bassil
-
-Rick A. Reijnders
-
-Laurence de Nijs
-
-Bart P.F. Rutten
-
-Ehsan Pishva
-
-Gunter Kenis
+Katherine Bassil, Rick A. Reijnders, Laurence de Nijs, Bart P.F. Rutten, Ehsan Pishva, Gunter Kenis
 
 
 ### Contact
